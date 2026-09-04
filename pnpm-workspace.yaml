@@ -1,3 +1,4 @@
 minimumReleaseAgeExclude:
   - '@next/*'
   - next
+  - '@supabase/ssr@0.12.6'
