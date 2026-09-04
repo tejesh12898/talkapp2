@@ -220,7 +220,10 @@ export function leaveRoom(roomId: string, userId: string, nickname: string) {
 export function kickMember(roomId: string, userId: string) {
   const sb = getSupabase()
   if (sb) {
-    const channel = sb.channel(`room-${roomId}-presence`)
+    const topic = `room-${roomId}-presence`
+    const channel =
+      sb.getChannels().find((c) => c.topic === `realtime:${topic}` || c.topic === topic) ||
+      sb.channel(topic)
     channel.send({
       type: 'broadcast',
       event: 'kick_user',
@@ -234,7 +237,10 @@ export function kickMember(roomId: string, userId: string) {
 export function muteMember(roomId: string, userId: string) {
   const sb = getSupabase()
   if (sb) {
-    const channel = sb.channel(`room-${roomId}-presence`)
+    const topic = `room-${roomId}-presence`
+    const channel =
+      sb.getChannels().find((c) => c.topic === `realtime:${topic}` || c.topic === topic) ||
+      sb.channel(topic)
     channel.send({
       type: 'broadcast',
       event: 'mute_user',
@@ -296,8 +302,9 @@ export function totalOnline(): number {
 export function subscribeRooms(cb: () => void): () => void {
   const sb = getSupabase()
   if (sb) {
+    const topic = `rooms-feed-${Math.random().toString(36).slice(2)}`
     const ch = sb
-      .channel('rooms-feed')
+      .channel(topic)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, cb)
       .subscribe()
     return () => {
@@ -315,8 +322,9 @@ export function subscribeMessages(
 ): () => void {
   const sb = getSupabase()
   if (sb) {
+    const topic = `room-${roomId}-messages-${Math.random().toString(36).slice(2)}`
     const ch = sb
-      .channel(`room-${roomId}-messages`)
+      .channel(topic)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${roomId}` },
@@ -357,7 +365,14 @@ export function subscribePresence(
 ): () => void {
   const sb = getSupabase()
   if (sb) {
-    const channel = sb.channel(`room-${roomId}-presence`, {
+    const topic = `room-${roomId}-presence`
+    // If a channel with this topic is already registered, remove it first to avoid duplicate subscription collisions
+    const existing = sb.getChannels().find((c) => c.topic === `realtime:${topic}` || c.topic === topic)
+    if (existing) {
+      sb.removeChannel(existing)
+    }
+
+    const channel = sb.channel(topic, {
       config: {
         presence: {
           key: currentMember.user_id,
