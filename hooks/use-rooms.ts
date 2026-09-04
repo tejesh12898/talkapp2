@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { fetchRooms, subscribeRooms, totalOnline, usingSupabase } from '@/lib/backend'
+import { fetchRooms, subscribeRooms, fetchTotalOnline, totalOnline, usingSupabase } from '@/lib/backend'
 import type { Room } from '@/lib/types'
 
 export function useRooms() {
@@ -14,10 +14,13 @@ export function useRooms() {
 
     async function load() {
       try {
-        const data = await fetchRooms()
+        const [data, onlineCount] = await Promise.all([
+          fetchRooms(),
+          usingSupabase ? fetchTotalOnline() : Promise.resolve(totalOnline()),
+        ])
         if (!active) return
         setRooms(data)
-        setOnline(usingSupabase ? 0 : totalOnline())
+        setOnline(onlineCount)
         setError(null)
       } catch {
         if (active) setError('We could not load rooms. Please try again.')
@@ -26,13 +29,20 @@ export function useRooms() {
 
     load()
     const unsub = subscribeRooms(() => load())
-    // keep the live online count ticking for the mock backend
-    const interval = usingSupabase ? null : setInterval(() => setOnline(totalOnline()), 3000)
+
+    // Refresh online count periodically
+    const interval = setInterval(async () => {
+      if (!active) return
+      try {
+        const count = usingSupabase ? await fetchTotalOnline() : totalOnline()
+        if (active) setOnline(count)
+      } catch {}
+    }, 10000)
 
     return () => {
       active = false
       unsub()
-      if (interval) clearInterval(interval)
+      clearInterval(interval)
     }
   }, [])
 

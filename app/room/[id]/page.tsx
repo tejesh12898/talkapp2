@@ -2,20 +2,21 @@
 
 import { use, useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Wifi, WifiOff, MessageSquare } from 'lucide-react'
+import { Wifi, WifiOff, MessageSquare, ArrowDown } from 'lucide-react'
 import { Navbar } from '@/components/navbar'
 import { NicknameModal } from '@/components/nickname-modal'
 import { RoomHeader } from '@/components/chat/room-header'
 import { MessageBubble } from '@/components/chat/message-bubble'
 import { MessageInput } from '@/components/chat/message-input'
 import { MemberList } from '@/components/chat/member-list'
+import { ReportModal, type ReportTarget } from '@/components/chat/report-modal'
 import { MessageSkeleton } from '@/components/loading-skeleton'
 import { EmptyState } from '@/components/empty-state'
 import { useChat } from '@/hooks/use-chat'
 import { useSession } from '@/hooks/use-session'
 import { toggleBlocked } from '@/lib/session'
 import { deleteRoom, updateRoom } from '@/lib/backend'
-import type { Message } from '@/lib/types'
+import type { Member, Message } from '@/lib/types'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
@@ -34,10 +35,41 @@ export default function RoomPage({
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const autoScrollRef = useRef(true)
 
-  const { room, messages, members, status, error, send, kick } = useChat({
+  const [inviteCode, setInviteCode] = useState<string | null>(null)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const code = new URLSearchParams(window.location.search).get('invite')
+      if (code) setInviteCode(code)
+    }
+  }, [])
+
+  const { room, messages, members, status, error, send, kick, mute, isMuted } = useChat({
     roomId: id,
     session,
+    inviteCode,
   })
+
+  const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null)
+  const [reportModalOpen, setReportModalOpen] = useState(false)
+
+  const handleReportMessage = useCallback((msg: Message) => {
+    setReportTarget({
+      type: 'message',
+      messageId: msg.id,
+      userId: msg.user_id,
+      nickname: msg.nickname,
+    })
+    setReportModalOpen(true)
+  }, [])
+
+  const handleReportMember = useCallback((member: Member) => {
+    setReportTarget({
+      type: 'user',
+      userId: member.user_id,
+      nickname: member.nickname,
+    })
+    setReportModalOpen(true)
+  }, [])
 
   // Prompt for nickname if not signed in
   useEffect(() => {
@@ -46,10 +78,21 @@ export default function RoomPage({
     }
   }, [ready, session])
 
-  // Auto-scroll to bottom
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  const scrollToBottom = useCallback(() => {
+    autoScrollRef.current = true
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    setUnreadCount(0)
+  }, [])
+
+  // Auto-scroll to bottom or increment unread counter
   useEffect(() => {
     if (autoScrollRef.current) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+      setUnreadCount(0)
+    } else {
+      setUnreadCount((prev) => prev + 1)
     }
   }, [messages])
 
@@ -59,6 +102,9 @@ export default function RoomPage({
     if (!el) return
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
     autoScrollRef.current = atBottom
+    if (atBottom) {
+      setUnreadCount(0)
+    }
   }
 
   const handleReply = useCallback((msg: Message) => {
@@ -145,7 +191,7 @@ export default function RoomPage({
       {/* Main chat area */}
       <div className="flex flex-1 overflow-hidden">
         {/* Messages */}
-        <div className="flex flex-1 flex-col">
+        <div className="relative flex flex-1 flex-col overflow-hidden">
           {/* Message list */}
           <div
             ref={scrollContainerRef}
@@ -170,6 +216,7 @@ export default function RoomPage({
                     isOwn={msg.user_id === session?.id}
                     onReply={handleReply}
                     onBlock={msg.user_id !== session?.id ? handleBlock : undefined}
+                    onReport={msg.user_id !== session?.id ? handleReportMessage : undefined}
                   />
                 ))}
                 <div ref={messagesEndRef} />
@@ -177,13 +224,32 @@ export default function RoomPage({
             )}
           </div>
 
+          {/* New messages pill */}
+          {unreadCount > 0 && (
+            <button
+              type="button"
+              onClick={scrollToBottom}
+              className="absolute bottom-20 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground shadow-lg transition-all hover:scale-105 active:scale-95 animate-in fade-in slide-in-from-bottom-2"
+            >
+              <span>{unreadCount === 1 ? '1 new message' : `${unreadCount} new messages`}</span>
+              <ArrowDown className="size-3.5" />
+            </button>
+          )}
+
           {/* Input */}
           {session && (
             <MessageInput
               onSend={send}
               replyTo={replyTo}
               onCancelReply={() => setReplyTo(null)}
-              disabled={status !== 'connected'}
+              disabled={status !== 'connected' || isMuted || (room.is_locked && !isOwner)}
+              placeholder={
+                isMuted
+                  ? 'You are muted in this room'
+                  : room.is_locked && !isOwner
+                    ? 'This room is locked by the owner'
+                    : 'Type a message…'
+              }
             />
           )}
         </div>
@@ -202,6 +268,8 @@ export default function RoomPage({
               currentUserId={session?.id ?? ''}
               isOwner={isOwner}
               onKick={isOwner ? kick : undefined}
+              onMute={isOwner ? mute : undefined}
+              onReport={handleReportMember}
               className="h-full"
             />
           )}
@@ -217,6 +285,14 @@ export default function RoomPage({
             router.push('/rooms')
           }
         }}
+      />
+
+      {/* Report Modal */}
+      <ReportModal
+        open={reportModalOpen}
+        onOpenChange={setReportModalOpen}
+        target={reportTarget}
+        roomId={room.id}
       />
     </div>
   )

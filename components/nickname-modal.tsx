@@ -35,6 +35,7 @@ export function NicknameModal({
   const [value, setValue] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [seed, setSeed] = useState('preview')
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
     if (open) {
@@ -42,22 +43,32 @@ export function NicknameModal({
       setValue(initial)
       setSeed(session?.avatar_seed ?? 'preview')
       setError(null)
+      setIsSubmitting(false)
     }
   }, [open, mode, session])
 
-  function submit() {
+  async function submit() {
     const result = validateNickname(value)
     if (!result.ok) {
       setError(result.error ?? 'Invalid nickname.')
       return
     }
-    if (mode === 'rename') {
-      rename(result.value)
-    } else {
-      signIn(result.value)
+    setIsSubmitting(true)
+    setError(null)
+    try {
+      if (mode === 'rename') {
+        await rename(result.value)
+      } else {
+        await signIn(result.value)
+      }
+      onComplete?.(result.value)
+      onOpenChange(false)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to save nickname.'
+      setError(msg)
+    } finally {
+      setIsSubmitting(false)
     }
-    onComplete?.(result.value)
-    onOpenChange(false)
   }
 
   return (
@@ -68,8 +79,7 @@ export function NicknameModal({
             {mode === 'rename' ? 'Change your nickname' : 'Pick a nickname'}
           </DialogTitle>
           <DialogDescription>
-            No account needed. Choose a temporary name — it is stored only on this
-            device.
+            No account needed. Choose a nickname to join live rooms and chat.
           </DialogDescription>
         </DialogHeader>
 
@@ -132,9 +142,13 @@ export function NicknameModal({
           </FieldDescription>
         </Field>
 
-        <Button onClick={submit} className="w-full">
+        <Button onClick={submit} className="w-full" disabled={isSubmitting}>
           <Sparkles data-icon="inline-start" />
-          {mode === 'rename' ? 'Save nickname' : 'Start chatting'}
+          {isSubmitting
+            ? 'Saving...'
+            : mode === 'rename'
+              ? 'Save nickname'
+              : 'Start chatting'}
         </Button>
       </DialogContent>
     </Dialog>

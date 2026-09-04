@@ -12,9 +12,16 @@ interface MessageInputProps {
   replyTo: Message | null
   onCancelReply: () => void
   disabled?: boolean
+  placeholder?: string
 }
 
-export function MessageInput({ onSend, replyTo, onCancelReply, disabled }: MessageInputProps) {
+export function MessageInput({
+  onSend,
+  replyTo,
+  onCancelReply,
+  disabled,
+  placeholder = 'Type a message…',
+}: MessageInputProps) {
   const [value, setValue] = useState('')
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
@@ -65,7 +72,7 @@ export function MessageInput({ onSend, replyTo, onCancelReply, disabled }: Messa
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Type a message…"
+            placeholder={placeholder}
             disabled={disabled}
             maxLength={MESSAGE_MAX + 50}
             rows={1}

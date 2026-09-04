@@ -19,10 +19,11 @@ interface MessageBubbleProps {
   isOwn: boolean
   onReply?: (msg: Message) => void
   onBlock?: (userId: string) => void
+  onReport?: (msg: Message) => void
 }
 
 export const MessageBubble = forwardRef<HTMLDivElement, MessageBubbleProps>(
-  function MessageBubble({ message, isOwn, onReply, onBlock }, ref) {
+  function MessageBubble({ message, isOwn, onReply, onBlock, onReport }, ref) {
     // System messages
     if (message.kind === 'system') {
       return (
@@ -108,6 +109,15 @@ export const MessageBubble = forwardRef<HTMLDivElement, MessageBubbleProps>(
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuSeparator />
+                  {onReport && (
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive"
+                      onClick={() => onReport(message)}
+                    >
+                      <Flag className="mr-2 size-3.5" />
+                      Report message
+                    </DropdownMenuItem>
+                  )}
                   {onBlock && (
                     <DropdownMenuItem
                       className="text-destructive focus:text-destructive"

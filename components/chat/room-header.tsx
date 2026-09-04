@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { ArrowLeft, Users, Hash, Settings, Trash2, Lock, Unlock } from 'lucide-react'
+import { ArrowLeft, Users, Hash, Settings, Trash2, Lock, Unlock, Share2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -86,6 +87,26 @@ export function RoomHeader({
         >
           <Users className="size-4" />
         </Button>
+
+        {room.is_private && room.invite_code && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            onClick={() => {
+              if (typeof window !== 'undefined') {
+                const inviteUrl = `${window.location.origin}/room/${room.id}?invite=${room.invite_code}`
+                navigator.clipboard.writeText(inviteUrl)
+                toast.success('Invite link copied!', {
+                  description: 'Share this link with anyone you want to invite.',
+                })
+              }
+            }}
+            aria-label="Copy invite link"
+          >
+            <Share2 className="size-4" />
+          </Button>
+        )}
 
         {isOwner && (
           <DropdownMenu>
